@@ -1,0 +1,42 @@
+name: Aktualizace závodů LOS
+
+on:
+  schedule:
+    # Každý den v 6:00 ráno (UTC = 7:00 nebo 8:00 SEČ/SELČ)
+    - cron: "0 6 * * *"
+  workflow_dispatch: # Možnost spustit ručně přes GitHub UI
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  scrape-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repozitáře
+        uses: actions/checkout@v4
+
+      - name: Nastavení Pythonu
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Spuštění scraperu
+        run: python scripts/scrape.py
+
+      - name: Commit aktualizovaných dat
+        run: |
+          git config user.name "LOS Bot"
+          git config user.email "actions@github.com"
+          git add contests.json
+          git diff --staged --quiet || git commit -m "Aktualizace závodů $(date -u +%Y-%m-%d)"
+          git push
+
+      - name: Deploy na GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: .
+          exclude_assets: ".github,scripts,README.md"

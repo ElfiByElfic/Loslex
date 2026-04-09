@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#ffffff">
+<title>Sledovač závodů LOS</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f5f5f4; --bg3: #e8e8e6;
+    --text: #1a1a18; --text2: #6b6b67; --text3: #a0a09b;
+    --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.2);
+    --blue: #2563eb; --blue-bg: #eff6ff; --blue-text: #1d4ed8;
+    --green: #16a34a; --green-bg: #f0fdf4; --green-text: #15803d;
+    --amber: #d97706; --amber-bg: #fffbeb; --amber-text: #b45309;
+    --red: #dc2626; --red-bg: #fef2f2; --red-text: #b91c1c;
+    --radius: 10px; --radius-sm: 6px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #262624; --bg3: #323230;
+      --text: #f0f0ec; --text2: #a0a09b; --text3: #6b6b67;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
+      --blue-bg: #1e3a5f; --blue-text: #93c5fd;
+      --green-bg: #14532d; --green-text: #86efac;
+      --amber-bg: #451a03; --amber-text: #fcd34d;
+      --red-bg: #450a0a; --red-text: #fca5a5;
+    }
+  }
+  html { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  body { max-width: 700px; margin: 0 auto; padding: 0 12px 80px; }
+
+  /* Header */
+  .header { padding: 20px 0 12px; display: flex; justify-content: space-between; align-items: flex-start; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header .updated { font-size: 11px; color: var(--text3); margin-top: 3px; }
+  .btn-refresh { font-size: 12px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: var(--bg2); color: var(--text); cursor: pointer; }
+  .btn-refresh:hover { background: var(--bg3); }
+
+  /* Status banner */
+  .banner { background: var(--amber-bg); border: 1px solid var(--amber); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: var(--amber-text); display: none; }
+
+  /* Tabs */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 14px; position: sticky; top: 0; background: var(--bg); z-index: 10; padding-top: 4px; }
+  .tab { padding: 9px 14px; font-size: 13px; cursor: pointer; border: none; background: none; color: var(--text2); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.on { color: var(--blue); font-weight: 500; border-bottom-color: var(--blue); }
+
+  .sec { display: none; } .sec.on { display: block; }
+
+  /* Filters */
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+  .chip { font-size: 12px; padding: 5px 11px; border-radius: 20px; border: 1px solid var(--border2); cursor: pointer; background: none; color: var(--text2); }
+  .chip:hover { background: var(--bg2); }
+  .chip.on { background: var(--blue-bg); color: var(--blue-text); border-color: var(--blue); font-weight: 500; }
+  select { font-size: 12px; padding: 5px 8px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: var(--bg); color: var(--text); cursor: pointer; }
+
+  .count { font-size: 12px; color: var(--text3); margin-bottom: 10px; }
+
+  /* Contest cards */
+  .card { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; transition: border-color .15s; }
+  .card.watched { border-color: var(--blue); }
+  .card-row { display: flex; gap: 10px; align-items: flex-start; }
+  .card-body { flex: 1; min-width: 0; }
+  .ctitle { font-size: 14px; font-weight: 500; line-height: 1.4; margin-bottom: 3px; }
+  .ctitle a { color: var(--text); text-decoration: none; }
+  .ctitle a:hover { color: var(--blue); }
+  .cmeta { font-size: 12px; color: var(--text2); margin-bottom: 7px; }
+  .badges { display: flex; flex-wrap: wrap; gap: 4px; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--bg2); color: var(--text2); border: 1px solid var(--border); white-space: nowrap; }
+  .badge.ok { background: var(--green-bg); color: var(--green-text); border-color: var(--green); }
+  .badge.closed { color: var(--text3); }
+  .badge.soon { background: var(--amber-bg); color: var(--amber-text); border-color: var(--amber); }
+  .badge.urgent { background: var(--red-bg); color: var(--red-text); border-color: var(--red); }
+  .btn-w { font-size: 12px; padding: 5px 11px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: none; color: var(--text2); cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+  .btn-w:hover { background: var(--bg2); }
+  .btn-w.on { background: var(--blue-bg); color: var(--blue-text); border-color: var(--blue); }
+
+  /* Reminder block inside watched card */
+  .rem-block { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .rem-label { font-size: 11px; color: var(--text3); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  .rem-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+  .rem-chip { font-size: 12px; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border2); cursor: pointer; background: none; color: var(--text2); }
+  .rem-chip:hover { background: var(--bg2); }
+  .rem-chip.on { background: var(--green-bg); color: var(--green-text); border-color: var(--green); }
+
+  .btn-del { font-size: 12px; padding: 4px 9px; border: 1px solid var(--red); border-radius: var(--radius-sm); background: none; color: var(--red-text); cursor: pointer; }
+  .btn-del:hover { background: var(--red-bg); }
+
+  /* Email section */
+  .box { background: var(--bg2); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+  .box h3 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+  .box p { font-size: 13px; color: var(--text2); margin-bottom: 12px; line-height: 1.6; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+  .field input[type=email] { width: 100%; padding: 8px 11px; font-size: 14px; border: 1px solid var(--border2); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); }
+  .field input[type=email]:focus { outline: 2px solid var(--blue); border-color: transparent; }
+  .btn-primary { font-size: 13px; padding: 8px 18px; border-radius: var(--radius-sm); border: none; background: var(--blue); color: #fff; cursor: pointer; font-weight: 500; }
+  .btn-primary:hover { opacity: .9; }
+  .btn-sec { font-size: 13px; padding: 7px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border2); background: var(--bg); color: var(--text); cursor: pointer; }
+  .btn-sec:hover { background: var(--bg3); }
+  .status-ok { font-size: 12px; color: var(--green); margin-left: 8px; }
+  .status-err { font-size: 12px; color: var(--red-text); margin-left: 8px; }
+
+  .empty { text-align: center; padding: 2.5rem 1rem; color: var(--text3); font-size: 13px; }
+  .loader { text-align: center; padding: 2rem; color: var(--text3); font-size: 13px; }
+  .rem-list-card { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
+  .rem-info .rt { font-size: 13px; font-weight: 500; }
+  .rem-info .rs { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+  /* Bottom nav for mobile feel */
+  .bottom-bar { display: none; }
+  @media (max-width: 500px) {
+    .tabs { display: none; }
+    .bottom-bar { display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg); border-top: 1px solid var(--border); z-index: 100; }
+    .bottom-bar .tab { flex: 1; padding: 10px 4px; font-size: 11px; text-align: center; display: flex; flex-direction: column; gap: 3px; align-items: center; }
+    .bottom-bar .tab svg { width: 20px; height: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Závody LOS</h1>
+    <div class="updated" id="updated">Načítám...</div>
+  </div>
+  <button class="btn-refresh" onclick="loadData()">↻ Aktualizovat</button>
+</div>
+
+<div class="banner" id="banner"></div>
+
+<div class="tabs">
+  <button class="tab on" onclick="tab('races',this)">Závody</button>
+  <button class="tab" onclick="tab('watched',this)">Sledované <span id="wbadge"></span></button>
+  <button class="tab" onclick="tab('reminders',this)">Upomínky <span id="rbadge"></span></button>
+  <button class="tab" onclick="tab('email',this)">E-mail</button>
+</div>
+
+<!-- Mobile bottom nav -->
+<div class="bottom-bar">
+  <button class="tab on" onclick="tab('races',this)">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+    Závody
+  </button>
+  <button class="tab" onclick="tab('watched',this)">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M5 12s2.545-5 7-5c4.454 0 7 5 7 5s-2.546 5-7 5c-4.455 0-7-5-7-5z"/><circle cx="12" cy="12" r="3"/></svg>
+    Sledované
+  </button>
+  <button class="tab" onclick="tab('reminders',this)">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+    Upomínky
+  </button>
+  <button class="tab" onclick="tab('email',this)">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+    E-mail
+  </button>
+</div>
+
+<!-- RACES -->
+<div id="s-races" class="sec on">
+  <div class="filters">
+    <button class="chip on" data-f="all" onclick="setF(this)">Vše</button>
+    <button class="chip" data-f="active" onclick="setF(this)">Reg. otevřena</button>
+    <button class="chip" data-f="pohar" onclick="setF(this)">Pohárové</button>
+    <button class="chip" data-f="losik" onclick="setF(this)">LOSík</button>
+    <select id="regionSel" onchange="renderRaces()">
+      <option value="">Všechny kraje</option>
+      <option>Hlavní město Praha</option>
+      <option>Středočeský kraj</option>
+      <option>Jihočeský kraj</option>
+      <option>Plzeňský kraj</option>
+      <option>Karlovarský kraj</option>
+      <option>Ústecký kraj</option>
+      <option>Liberecký kraj</option>
+      <option>Královéhradecký kraj</option>
+      <option>Pardubický kraj</option>
+      <option>Kraj Vysočina</option>
+      <option>Jihomoravský kraj</option>
+      <option>Olomoucký kraj</option>
+      <option>Moravskoslezský kraj</option>
+      <option>Zlínský kraj</option>
+    </select>
+  </div>
+  <div class="count" id="countLabel"></div>
+  <div id="raceList"><div class="loader">Načítám závody...</div></div>
+</div>
+
+<!-- WATCHED -->
+<div id="s-watched" class="sec">
+  <div id="watchedList"></div>
+</div>
+
+<!-- REMINDERS -->
+<div id="s-reminders" class="sec">
+  <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Prohlížečové notifikace se zobrazí ve správný čas (aplikace musí být otevřena). Pro spolehlivé upomínky nastav e-mail.</p>
+  <div id="remList"></div>
+</div>
+
+<!-- EMAIL -->
+<div id="s-email" class="sec">
+  <div class="box">
+    <h3>E-mailové notifikace</h3>
+    <p>Zadej svůj e-mail a vyber, kdy chceš dostávat upomínky pro závody, které sleduješ.</p>
+    <div class="field">
+      <label>Tvůj e-mail</label>
+      <input type="email" id="emailInput" placeholder="jmeno@email.cz">
+    </div>
+    <div class="field">
+      <label>Upomínka před závodem</label>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px" id="dayChips">
+        <button class="chip on" data-d="7" onclick="toggleDay(this)">7 dní</button>
+        <button class="chip on" data-d="3" onclick="toggleDay(this)">3 dny</button>
+        <button class="chip" data-d="1" onclick="toggleDay(this)">1 den</button>
+      </div>
+    </div>
+    <div class="field">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" id="chkReg" checked style="width:16px;height:16px">
+        Upozornit při otevření registrace
+      </label>
+    </div>
+    <button class="btn-primary" onclick="saveEmail()">Uložit nastavení</button>
+    <span id="emailStatus"></span>
+  </div>
+
+  <div class="box">
+    <h3>Jak fungují e-maily</h3>
+    <p>Aplikace sama e-maily neposílá — k tomu je potřeba propojení s e-mailovou službou. Nejjednodušší možnosti:</p>
+    <p><strong>📅 iCalendar (doporučeno):</strong> Exportuj sledované závody jako .ics soubor a přidej do Google / Apple kalendáře. Kalendář ti sám pošle upomínku e-mailem.</p>
+    <p><strong>⚡ Make.com / Zapier:</strong> Stáhni JSON a nastav automatizaci, která denně zkontroluje termíny a pošle e-mail.</p>
+    <p><strong>🐍 Vlastní skript:</strong> Repozitář obsahuje <code>scripts/scrape.py</code> a hotový GitHub Actions workflow — stačí přidat krok s odesláním e-mailu (SendGrid, SMTP).</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+      <button class="btn-sec" onclick="exportICS()">⬇ Export .ics kalendáře</button>
+      <button class="btn-sec" onclick="exportJSON()">⬇ Export JSON</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const MONTHS = {ledna:0,února:1,března:2,dubna:3,května:4,června:5,července:6,srpna:7,září:8,října:9,listopadu:10,prosince:11};
+let contests = [];
+let filter = 'all';
+let watched = {};
+let reminders = {};
+let emailCfg = {email:'', days:[7,3], regAlert:true};
+let selDays = [7,3];
+
+try { watched = JSON.parse(localStorage.getItem('lx_w')||'{}'); } catch(e) {}
+try { reminders = JSON.parse(localStorage.getItem('lx_r')||'{}'); } catch(e) {}
+try { const e = JSON.parse(localStorage.getItem('lx_e')); if(e){emailCfg=e; selDays=e.days||[7,3];} } catch(e) {}
+
+function save() {
+  try { localStorage.setItem('lx_w', JSON.stringify(watched)); } catch(e) {}
+  try { localStorage.setItem('lx_r', JSON.stringify(reminders)); } catch(e) {}
+}
+
+async function loadData() {
+  document.getElementById('updated').textContent = 'Načítám...';
+  try {
+    const res = await fetch('contests.json?v=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    contests = data.contests || [];
+    const upd = new Date(data.updated);
+    document.getElementById('updated').textContent = 'Aktualizováno: ' + upd.toLocaleDateString('cs-CZ', {day:'numeric',month:'long',year:'numeric'});
+    renderRaces();
+    checkBanner();
+  } catch(e) {
+    document.getElementById('updated').textContent = 'Chyba načtení dat';
+    document.getElementById('raceList').innerHTML = '<div class="empty">Nepodařilo se načíst závody.<br>Zkontroluj, zda existuje soubor contests.json.</div>';
+  }
+}
+
+function parseD(s) {
+  if (!s) return null;
+  const m = s.match(/(\d+)\.\s*(\w+)\s*(\d{4})/);
+  if (!m) return null;
+  const mo = MONTHS[m[2].toLowerCase()];
+  if (mo === undefined) return null;
+  return new Date(+m[3], mo, +m[1]);
+}
+
+function daysUntil(d) {
+  if (!d) return null;
+  const n = new Date(); n.setHours(0,0,0,0);
+  return Math.round((d - n) / 86400000);
+}
+
+function cdLabel(days) {
+  if (days === null) return '';
+  if (days < 0) return '';
+  if (days === 0) return 'dnes!';
+  if (days === 1) return 'zítra';
+  return `za ${days} dní`;
+}
+
+function regBadge(c) {
+  const r = c.reg;
+  if (r === 'Aktivní') return {cls:'ok', txt:'Registrace otevřena'};
+  if (r === 'Ukončena') return {cls:'closed', txt:'Registrace ukončena'};
+  if (!r) return {cls:'', txt:''};
+  return {cls:'soon', txt:'Reg. od ' + r};
+}
+
+function tab(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t => { if(t.textContent.trim().startsWith(el.textContent.trim().split('(')[0].trim())) t.classList.add('on'); });
+  el.classList.add('on');
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('on'));
+  document.getElementById('s-'+name).classList.add('on');
+  if (name==='watched') renderWatched();
+  if (name==='reminders') renderReminders();
+  if (name==='email') initEmail();
+}
+
+function setF(el) {
+  document.querySelectorAll('.chip[data-f]').forEach(c => c.classList.remove('on'));
+  el.classList.add('on');
+  filter = el.dataset.f;
+  renderRaces();
+}
+
+function renderRaces() {
+  const region = document.getElementById('regionSel').value;
+  let list = contests.filter(c => {
+    if (region && c.region !== region) return false;
+    if (filter==='active' && c.reg !== 'Aktivní') return false;
+    if (filter==='pohar' && !c.type.toLowerCase().includes('pohár')) return false;
+    if (filter==='losik' && c.type !== 'LOSík') return false;
+    return true;
+  });
+  document.getElementById('countLabel').textContent = `${list.length} závodů`;
+  if (!list.length) { document.getElementById('raceList').innerHTML='<div class="empty">Žádné závody pro tento filtr.</div>'; return; }
+  let html = '';
+  list.forEach(c => {
+    const rb = regBadge(c);
+    const d = parseD(c.date);
+    const n = daysUntil(d);
+    const cd = cdLabel(n);
+    const urgCls = (n !== null && n >= 0 && n <= 3) ? 'urgent' : '';
+    const isW = !!watched[c.id];
+    html += `<div class="card${isW?' watched':''}" id="rc-${c.id}">
+      <div class="card-row">
+        <div class="card-body">
+          <div class="ctitle"><a href="${c.url}" target="_blank">${c.title}</a></div>
+          <div class="cmeta">${c.date} · ${c.location||c.loc||''} · ${c.region}</div>
+          <div class="badges">
+            <span class="badge">${c.type}</span>
+            <span class="badge">${c.weapon}</span>
+            ${rb.txt ? `<span class="badge ${rb.cls}">${rb.txt}</span>` : ''}
+            ${c.capacity ? `<span class="badge">${c.capacity}</span>` : ''}
+            ${cd ? `<span class="badge ${urgCls}">${cd}</span>` : ''}
+          </div>
+        </div>
+        <button class="btn-w${isW?' on':''}" onclick="toggleW('${c.id}',this)">${isW?'✓ Sleduji':'+ Sledovat'}</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById('raceList').innerHTML = html;
+  badges();
+}
+
+function toggleW(id, btn) {
+  if (watched[id]) {
+    delete watched[id];
+    Object.keys(reminders).filter(k=>k.startsWith(id+'_')).forEach(k=>delete reminders[k]);
+  } else {
+    watched[id] = contests.find(c=>c.id===id);
+  }
+  save();
+  const isW = !!watched[id];
+  btn.textContent = isW ? '✓ Sleduji' : '+ Sledovat';
+  btn.classList.toggle('on', isW);
+  btn.closest('.card').classList.toggle('watched', isW);
+  badges();
+}
+
+function badges() {
+  const wc = Object.keys(watched).length;
+  const rc = Object.keys(reminders).length;
+  document.getElementById('wbadge').textContent = wc ? `(${wc})` : '';
+  document.getElementById('rbadge').textContent = rc ? `(${rc})` : '';
+}
+
+const REM_LABELS = ['7 dní před závodem','3 dny před závodem','1 den před závodem','Při otevření registrace'];
+
+function renderWatched() {
+  const keys = Object.keys(watched);
+  if (!keys.length) { document.getElementById('watchedList').innerHTML='<div class="empty">Žádné sledované závody.<br>Přidej je na záložce Závody.</div>'; return; }
+  let html = '';
+  keys.forEach(id => {
+    const c = watched[id];
+    const rb = regBadge(c);
+    const d = parseD(c.date);
+    const n = daysUntil(d);
+    const cd = cdLabel(n);
+    const urgCls = (n!==null && n>=0 && n<=3) ? 'urgent' : '';
+    const chips = REM_LABELS.map((lbl,i) => {
+      const key = `${id}_${i}`;
+      return `<button class="rem-chip${reminders[key]?' on':''}" onclick="toggleRem('${id}','${key}',${i},this)">${lbl}</button>`;
+    }).join('');
+    html += `<div class="card watched">
+      <div class="card-row">
+        <div class="card-body">
+          <div class="ctitle"><a href="${c.url}" target="_blank">${c.title}</a></div>
+          <div class="cmeta">${c.date} · ${c.location||c.loc||''} · ${c.region}</div>
+          <div class="badges">
+            ${rb.txt ? `<span class="badge ${rb.cls}">${rb.txt}</span>` : ''}
+            ${cd ? `<span class="badge ${urgCls}">${cd}</span>` : ''}
+          </div>
+          <div class="rem-block">
+            <div class="rem-label">Upomínky</div>
+            <div class="rem-chips">${chips}</div>
+          </div>
+        </div>
+        <button class="btn-del" onclick="removeW('${id}')">Odebrat</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById('watchedList').innerHTML = html;
+}
+
+function toggleRem(id, key, idx, btn) {
+  if (reminders[key]) { delete reminders[key]; btn.classList.remove('on'); }
+  else {
+    const c = watched[id];
+    reminders[key] = {id, idx, label:REM_LABELS[idx], title:c?.title, date:c?.date};
+    btn.classList.add('on');
+    requestNotifPermission();
+  }
+  save(); badges();
+}
+
+function requestNotifPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function removeW(id) {
+  delete watched[id];
+  Object.keys(reminders).filter(k=>k.startsWith(id+'_')).forEach(k=>delete reminders[k]);
+  save(); renderWatched(); badges();
+}
+
+function renderReminders() {
+  const keys = Object.keys(reminders);
+  if (!keys.length) { document.getElementById('remList').innerHTML='<div class="empty">Žádné upomínky. Nastav je na záložce Sledované.</div>'; return; }
+  let html = '';
+  keys.forEach(key => {
+    const r = reminders[key];
+    const d = parseD(r.date);
+    const n = daysUntil(d);
+    html += `<div class="rem-list-card">
+      <div class="rem-info">
+        <div class="rt">${r.title||'Závod'}</div>
+        <div class="rs">${r.label} · Závod: ${r.date}${n!==null&&n>=0?' · za '+n+' dní':''}</div>
+      </div>
+      <button class="btn-del" onclick="delRem('${key}')">Smazat</button>
+    </div>`;
+  });
+  document.getElementById('remList').innerHTML = html;
+}
+
+function delRem(key) { delete reminders[key]; save(); renderReminders(); badges(); }
+
+function checkBanner() {
+  const msgs = [];
+  Object.values(watched).forEach(c => {
+    const d = parseD(c.date);
+    const n = daysUntil(d);
+    if (n !== null && n >= 0 && n <= 7 && c.reg === 'Aktivní') {
+      msgs.push(`${c.title} – závod za ${n} dní, registrace otevřena!`);
+    }
+  });
+  const b = document.getElementById('banner');
+  if (msgs.length) { b.textContent = '⚠ ' + msgs.join(' | '); b.style.display = 'block'; }
+  else { b.style.display = 'none'; }
+}
+
+function initEmail() {
+  document.getElementById('emailInput').value = emailCfg.email || '';
+  document.querySelectorAll('#dayChips .chip').forEach(c => {
+    c.classList.toggle('on', selDays.includes(+c.dataset.d));
+  });
+  document.getElementById('chkReg').checked = emailCfg.regAlert !== false;
+}
+
+function toggleDay(el) {
+  const d = +el.dataset.d;
+  const idx = selDays.indexOf(d);
+  if (idx >= 0) { selDays.splice(idx,1); el.classList.remove('on'); }
+  else { selDays.push(d); el.classList.add('on'); }
+}
+
+function saveEmail() {
+  const em = document.getElementById('emailInput').value.trim();
+  const st = document.getElementById('emailStatus');
+  if (!em || !em.includes('@')) { st.textContent = 'Zadej platný e-mail.'; st.className='status-err'; return; }
+  emailCfg = {email:em, days:[...selDays], regAlert:document.getElementById('chkReg').checked};
+  try { localStorage.setItem('lx_e', JSON.stringify(emailCfg)); } catch(e) {}
+  st.textContent = 'Uloženo!'; st.className='status-ok';
+  setTimeout(() => { st.textContent=''; }, 2500);
+}
+
+function exportICS() {
+  const pad = n => String(n).padStart(2,'0');
+  let ics = 'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//LOS Sledovač//CS\r\nCALSCALE:GREGORIAN\r\n';
+  Object.values(watched).forEach(c => {
+    const d = parseD(c.date);
+    if (!d) return;
+    const dt = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+    const loc = (c.location||c.loc||'') + (c.region ? ', ' + c.region : '');
+    ics += `BEGIN:VEVENT\r\nUID:loslex-${c.id}@loslex.cz\r\nDTSTART;VALUE=DATE:${dt}\r\nSUMMARY:🎯 ${c.title}\r\nURL:${c.url}\r\nLOCATION:${loc}\r\nDESCRIPTION:Registrace\\: ${c.reg}\\n${c.url}\r\nEND:VEVENT\r\n`;
+  });
+  ics += 'END:VCALENDAR';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([ics], {type:'text/calendar'}));
+  a.download = 'loslex-zavody.ics'; a.click();
+}
+
+function exportJSON() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(Object.values(watched),null,2)], {type:'application/json'}));
+  a.download = 'loslex-sledovane.json'; a.click();
+}
+
+// Načti data při startu
+loadData();
+</script>
+</body>
+</html>
