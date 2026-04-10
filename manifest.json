@@ -1,0 +1,17 @@
+{
+  "name": "Sledovač závodů LOS",
+  "short_name": "LOS závody",
+  "description": "Sleduj termíny závodů a registrací na loslex.cz",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "lang": "cs",
+  "icons": [
+    {
+      "src": "https://www.loslex.cz/assets/images/loslex-light.webp",
+      "sizes": "192x192",
+      "type": "image/webp"
+    }
+  ]
+}
